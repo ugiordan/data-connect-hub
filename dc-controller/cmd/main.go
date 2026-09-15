@@ -147,10 +147,7 @@ func main() {
 	// generate self-signed certificates for the metrics server. While convenient for development and testing,
 	// this setup is not recommended for production.
 	//
-	// TODO(user): If you enable certManager, uncomment the following lines:
-	// - [METRICS-WITH-CERTS] at config/default/kustomization.yaml to generate and use certificates
-	// managed by cert-manager for the metrics server.
-	// - [PROMETHEUS-WITH-CERTS] at config/prometheus/kustomization.yaml for TLS certification.
+	// OpenShift deployments mount service-ca certificates through the OpenShift overlay.
 	if len(metricsCertPath) > 0 {
 		setupLog.Info("Initializing metrics certificate watcher using provided certificates",
 			"metrics-cert-path", metricsCertPath, "metrics-cert-name", metricsCertName, "metrics-cert-key", metricsCertKey)
@@ -188,10 +185,15 @@ func main() {
 	defer cancel()
 	if tlsResult.ProfileFetched {
 		watcher := &controllertls.ProfileWatcher{
-			Client:             mgr.GetClient(),
-			InitialProfileSpec: tlsResult.ProfileSpec,
+			Client:                 mgr.GetClient(),
+			InitialProfileSpec:     tlsResult.ProfileSpec,
+			InitialAdherencePolicy: tlsResult.AdherencePolicy,
 			OnProfileChange: func(context.Context) {
 				setupLog.Info("TLS profile changed; initiating shutdown to reload")
+				cancel()
+			},
+			OnAdherencePolicyChange: func(context.Context) {
+				setupLog.Info("TLS adherence policy changed; initiating shutdown to reload")
 				cancel()
 			},
 		}

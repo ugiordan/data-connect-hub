@@ -15,11 +15,10 @@ spec:
       scheme: https
       bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
       tlsConfig:
-        ca:
-          configMap:
-            name: openshift-service-ca.crt
-            key: service-ca.crt
-        serverName: metrics-service.system.svc
+        # TODO(user): The option insecureSkipVerify: true is not recommended for production since it disables
+        # certificate verification, exposing the system to potential man-in-the-middle attacks.
+        # OpenShift deployments replace this block with service-ca verification in the OpenShift overlay.
+        insecureSkipVerify: true
   selector:
     matchLabels:
       control-plane: manager

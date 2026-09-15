@@ -17,14 +17,17 @@ import (
 
 type ProfileWatcher struct {
 	client.Client
-	InitialProfileSpec configv1.TLSProfileSpec
-	OnProfileChange    func(context.Context)
+	InitialProfileSpec      configv1.TLSProfileSpec
+	InitialAdherencePolicy  configv1.TLSAdherencePolicy
+	OnProfileChange         func(context.Context)
+	OnAdherencePolicyChange func(context.Context)
 
-	lastProfile configv1.TLSProfileSpec
+	lastProfile         configv1.TLSProfileSpec
+	lastAdherencePolicy configv1.TLSAdherencePolicy
 }
 
 func (w *ProfileWatcher) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
-	if req.Name != "cluster" {
+	if req.Name != apiServerName {
 		return reconcile.Result{}, nil
 	}
 
@@ -33,24 +36,35 @@ func (w *ProfileWatcher) Reconcile(ctx context.Context, req reconcile.Request) (
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 
-	current := profileSpec(apiServer.Spec.TLSSecurityProfile)
-	if w.OnProfileChange != nil && !reflect.DeepEqual(w.lastProfile, current) {
-		w.lastProfile = current
-		w.OnProfileChange(ctx)
+	currentProfile := profileSpec(apiServer.Spec.TLSSecurityProfile)
+	if !reflect.DeepEqual(w.lastProfile, currentProfile) {
+		w.lastProfile = currentProfile
+		if w.OnProfileChange != nil {
+			w.OnProfileChange(ctx)
+		}
+	}
+
+	currentAdherencePolicy := apiServer.Spec.TLSAdherence
+	if w.lastAdherencePolicy != currentAdherencePolicy {
+		w.lastAdherencePolicy = currentAdherencePolicy
+		if w.OnAdherencePolicyChange != nil {
+			w.OnAdherencePolicyChange(ctx)
+		}
 	}
 	return reconcile.Result{}, nil
 }
 
 func (w *ProfileWatcher) SetupWithManager(mgr ctrl.Manager) error {
 	w.lastProfile = w.InitialProfileSpec
+	w.lastAdherencePolicy = w.InitialAdherencePolicy
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("tls-profile-watcher").
 		WithOptions(controller.Options{NeedLeaderElection: ptr(false)}).
 		For(&configv1.APIServer{}, builder.WithPredicates(predicate.Funcs{
-			CreateFunc:  func(e event.CreateEvent) bool { return e.Object.GetName() == "cluster" },
-			UpdateFunc:  func(e event.UpdateEvent) bool { return e.ObjectNew.GetName() == "cluster" },
-			DeleteFunc:  func(e event.DeleteEvent) bool { return e.Object.GetName() == "cluster" },
-			GenericFunc: func(e event.GenericEvent) bool { return e.Object.GetName() == "cluster" },
+			CreateFunc:  func(e event.CreateEvent) bool { return e.Object.GetName() == apiServerName },
+			UpdateFunc:  func(e event.UpdateEvent) bool { return e.ObjectNew.GetName() == apiServerName },
+			DeleteFunc:  func(e event.DeleteEvent) bool { return e.Object.GetName() == apiServerName },
+			GenericFunc: func(e event.GenericEvent) bool { return e.Object.GetName() == apiServerName },
 		})).
 		Complete(w)
 }

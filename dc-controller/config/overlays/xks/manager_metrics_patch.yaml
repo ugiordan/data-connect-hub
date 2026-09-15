@@ -4,6 +4,3 @@
 - op: add
   path: /spec/template/spec/containers/0/args/-
   value: --metrics-secure=false
-- op: replace
-  path: /spec/template/spec/volumes/0/secret/optional
-  value: true

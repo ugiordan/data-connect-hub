@@ -13,7 +13,3 @@ patches:
   target:
     kind: Service
     name: metrics-service
-- path: service_monitor_patch.yaml
-  target:
-    kind: ServiceMonitor
-    name: metrics-monitor

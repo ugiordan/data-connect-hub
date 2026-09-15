@@ -39,10 +39,13 @@ var tlsVersions = map[configv1.TLSProtocolVersion]uint16{
 	"VersionTLS13": cryptotls.VersionTLS13,
 }
 
+const apiServerName = "cluster"
+
 type Result struct {
-	TLSOpts        []func(*cryptotls.Config)
-	ProfileSpec    configv1.TLSProfileSpec
-	ProfileFetched bool
+	TLSOpts         []func(*cryptotls.Config)
+	ProfileSpec     configv1.TLSProfileSpec
+	AdherencePolicy configv1.TLSAdherencePolicy
+	ProfileFetched  bool
 }
 
 func Resolve(ctx context.Context, cfg *rest.Config) (Result, error) {
@@ -62,14 +65,18 @@ func Resolve(ctx context.Context, cfg *rest.Config) (Result, error) {
 }
 
 func resolve(ctx context.Context, k8sClient client.Reader) (Result, error) {
-	result := Result{ProfileSpec: intermediateProfile()}
+	result := Result{
+		ProfileSpec:     intermediateProfile(),
+		AdherencePolicy: configv1.TLSAdherencePolicyNoOpinion,
+	}
 	apiServer := &configv1.APIServer{}
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: "cluster"}, apiServer); err != nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: apiServerName}, apiServer); err != nil {
 		switch {
 		case meta.IsNoMatchError(err):
 			log.Info("TLS profile unavailable; using hardened defaults")
 		case apierrors.IsNotFound(err):
 			log.Info("APIServer resource not found; using hardened defaults")
+			result.ProfileFetched = true
 		case apierrors.IsServiceUnavailable(err), apierrors.IsTimeout(err), apierrors.IsServerTimeout(err),
 			apierrors.IsTooManyRequests(err), errors.Is(err, context.DeadlineExceeded):
 			log.Info("Transient error reading TLS profile; using hardened defaults", "error", err)
@@ -82,6 +89,7 @@ func resolve(ctx context.Context, k8sClient client.Reader) (Result, error) {
 
 	result.ProfileFetched = true
 	result.ProfileSpec = profileSpec(apiServer.Spec.TLSSecurityProfile)
+	result.AdherencePolicy = apiServer.Spec.TLSAdherence
 	return setTLSOpts(result)
 }
 
@@ -108,7 +116,13 @@ func profileSpec(profile *configv1.TLSSecurityProfile) configv1.TLSProfileSpec {
 }
 
 func setTLSOpts(result Result) (Result, error) {
-	tlsOpts, err := tlsOpts(result.ProfileSpec)
+	profile := result.ProfileSpec
+	if result.AdherencePolicy == configv1.TLSAdherencePolicyNoOpinion ||
+		result.AdherencePolicy == configv1.TLSAdherencePolicyLegacyAdheringComponentsOnly {
+		profile = intermediateProfile()
+	}
+
+	tlsOpts, err := tlsOpts(profile)
 	if err != nil {
 		return Result{}, err
 	}

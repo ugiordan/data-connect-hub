@@ -61,40 +61,6 @@ replacements:
     fieldPaths:
     - spec.template.spec.containers.[name=manager].env.[name=RELATED_IMAGE_ODH_KUBE_RBAC_PROXY_IMAGE].value
 
-- source:
-    kind: Service
-    version: v1
-    name: metrics-service
-    fieldPath: metadata.name
-  targets:
-  - select:
-      kind: ServiceMonitor
-      group: monitoring.coreos.com
-      version: v1
-      name: metrics-monitor
-    fieldPaths:
-    - spec.endpoints.0.tlsConfig.serverName
-    options:
-      delimiter: '.'
-      index: 0
-      create: true
-- source:
-    kind: Service
-    version: v1
-    name: metrics-service
-    fieldPath: metadata.namespace
-  targets:
-  - select:
-      kind: ServiceMonitor
-      group: monitoring.coreos.com
-      version: v1
-      name: metrics-monitor
-    fieldPaths:
-    - spec.endpoints.0.tlsConfig.serverName
-    options:
-      delimiter: '.'
-      index: 1
-      create: true
 resources:
 - ../crd
 - ../rbac
@@ -104,7 +70,8 @@ resources:
 #- ../webhook
 # [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER'. 'WEBHOOK' components are required.
 #- ../certmanager
-- ../prometheus
+# [PROMETHEUS] To enable prometheus monitor, uncomment all sections with 'PROMETHEUS'.
+#- ../prometheus
 # [METRICS] Expose the controller manager metrics service.
 - metrics_service.yaml
 # [NETWORK POLICY] Protect the /metrics endpoint and Webhook Server with NetworkPolicy.
@@ -121,9 +88,7 @@ patches:
   target:
     kind: Deployment
 
-- path: cert_metrics_manager_patch.yaml
-  target:
-    kind: Deployment
+# OpenShift deployments add service-ca certificate mounting in config/overlays/openshift.
 
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in
 # crd/kustomization.yaml
