@@ -124,6 +124,21 @@ func TestResolveFallbacksWhenConfigAPIIsMissing(t *testing.T) {
 	assertFallback(t, result, false)
 }
 
+func TestResolveFallbacksAndWatchesWhenAPIServerObjectIsMissing(t *testing.T) {
+	// A missing APIServer object is a bootstrap race on an OpenShift cluster:
+	// the fallback stays watchable so the watcher catches the object's
+	// creation instead of serving Intermediate until a process restart.
+	// Requires framework v0.4.0's NotFound watchable fix.
+	err := apierrors.NewNotFound(schema.GroupResource{
+		Group: "config.openshift.io", Resource: apiServerResource,
+	}, apiServerName)
+	result, resolveErr := resolveProfile(context.Background(), failingTLSReader{err: err})
+	if resolveErr != nil {
+		t.Fatalf("resolveProfile() returned an error: %v", resolveErr)
+	}
+	assertFallback(t, result, true)
+}
+
 func TestResolveFallbacksAndWatchesAfterTransientReadError(t *testing.T) {
 	for _, readErr := range []error{
 		apierrors.NewServiceUnavailable("unavailable"),
